@@ -16,7 +16,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - name: Restore
-        run: dotnet restore src/J2P.Core tests/J2P.Core.Tests
+        run: dotnet restore tests/J2P.Core.Tests
       - name: Build
         run: dotnet build tests/J2P.Core.Tests -c Release --no-restore
       - name: Test
