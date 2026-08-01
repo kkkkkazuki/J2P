@@ -15,4 +15,8 @@
     <EmbeddedResource Include="Pdf\Fonts\*.ttf" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="J2P.Core.Tests" />
+  </ItemGroup>
+
 </Project>

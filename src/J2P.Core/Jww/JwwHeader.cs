@@ -82,6 +82,22 @@ public sealed class JwwHeader
     /// <summary>カラー印刷指定。</summary>
     public bool ColorPrint { get; internal set; }
 
+    /// <summary>線描画の最大幅フラグ（nWid）。-101以下なら線幅は1/100mm単位。</summary>
+    public int WidthFlag { get; internal set; }
+
+    /// <summary>Ver.6.00以降: 印刷線幅の基準dpi。それ以前は「表示のみレイヤを出力しない」フラグ。</summary>
+    public uint PrinterDpiOrFlag { get; internal set; }
+
+    /// <summary>BitMap・ソリッドを最初に描画するか（一位が0以外）。</summary>
+    public bool SolidsFirst { get; internal set; }
+
+    /// <summary>プリンタ線幅テーブルの値が 1/100mm 単位か（旧形式はプリンタドット数単位）。</summary>
+    public bool WidthsAreHundredthsMm => WidthFlag < -100;
+
+    /// <summary>旧形式の線幅ドット→mm換算に使うdpi。</summary>
+    public double EffectiveDpi =>
+        Version >= 600 && PrinterDpiOrFlag is >= 72 and <= 4800 ? PrinterDpiOrFlag : 300.0;
+
     /// <summary>SXF拡張線色(1〜257)のプリンタ出力色。インデックス0は未使用。</summary>
     public uint[] SxfPrinterPenColors { get; } = new uint[257];
 
@@ -137,7 +153,7 @@ public sealed class JwwHeader
         for (int i = 0; i < 5; i++) ar.UInt32();  // 寸法関係の設定 m_lnSunpou1〜5
 
         ar.UInt32();                        // ダミー
-        ar.UInt32();                        // 線描画の最大幅 nWid
+        h.WidthFlag = ar.Int32();           // 線描画の最大幅 nWid
         h.PrintOriginX = ar.Double();
         h.PrintOriginY = ar.Double();
         h.PrintScale = ar.Double();
@@ -227,14 +243,14 @@ public sealed class JwwHeader
 
         ar.UInt32();                               // 実点を画面描画時の指定半径で描画
         h.DrawPointsWithPrinterRadius = ar.UInt32() != 0;
-        ar.UInt32();                               // BitMap・ソリッドを最初に描画
+        h.SolidsFirst = ar.UInt32() % 10 != 0;     // BitMap・ソリッドを最初に描画（一位）
 
         ar.UInt32(); ar.UInt32();                  // 逆描画・逆サーチ
         h.ColorPrint = ar.UInt32() != 0;
         ar.UInt32(); ar.UInt32();                  // レイヤ順印刷・色番号順印刷
         ar.UInt32();                               // プリンタ連続出力指定
         ar.UInt32();                               // 共通レイヤのグレー出力指定
-        ar.UInt32();                               // 表示のみレイヤは出力しない（Ver.6以降はdpi）
+        h.PrinterDpiOrFlag = ar.UInt32();          // 表示のみレイヤ非出力（Ver.6以降はdpi）
 
         if (v >= 223)
         {
