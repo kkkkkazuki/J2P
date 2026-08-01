@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test-core:
+    name: Core build + test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore src/J2P.Core tests/J2P.Core.Tests
+      - name: Build
+        run: dotnet build tests/J2P.Core.Tests -c Release --no-restore
+      - name: Test
+        run: dotnet test tests/J2P.Core.Tests -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+  publish-app:
+    name: App publish (Windows exe)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/J2P.App -c Release -r win-x64
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          --self-contained true -o publish
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: J2P-win-x64
+          path: publish/J2P.exe
