@@ -218,9 +218,15 @@ public static class PdfRenderer
             }
         }
 
+        /// <summary>
+        /// 補助線色（線色9）は Jw_cad では画面に出るだけで印刷されない。
+        /// </summary>
+        private static bool IsAuxiliaryColor(JwwEntity e) => e.PenColor == 9;
+
         private void DrawLine(JwwLine l, in Affine2D m)
         {
             if (l.PenStyle == 9) return; // 補助線種は印刷されない
+            if (IsAuxiliaryColor(l)) return;
             var pen = MakePen(l);
             var p0 = MapPoint(m, l.X0, l.Y0);
             var p1 = MapPoint(m, l.X1, l.Y1);
@@ -230,6 +236,7 @@ public static class PdfRenderer
         private void DrawArc(JwwArc a, in Affine2D m)
         {
             if (a.PenStyle == 9) return;
+            if (IsAuxiliaryColor(a)) return;
             if (a.Radius == 0) return;
             var pen = MakePen(a);
             var path = new XGraphicsPath();
@@ -250,6 +257,7 @@ public static class PdfRenderer
         private void DrawPoint(JwwPoint p, in Affine2D m)
         {
             if (p.IsTemporary) return; // 仮点は印刷されない
+            if (IsAuxiliaryColor(p)) return;
             var brush = new XSolidBrush(ResolveColor(p.PenColor, null));
             double rMm = _h.DrawPointsWithPrinterRadius && p.PenColor < 10
                 ? Math.Max(_h.PrinterPointRadii[p.PenColor], 0.05)
@@ -262,6 +270,7 @@ public static class PdfRenderer
         private void DrawText(JwwText t, in Affine2D m)
         {
             if (string.IsNullOrEmpty(t.Text)) return;
+            if (IsAuxiliaryColor(t)) return;
             if (t.Text.StartsWith("^@", StringComparison.Ordinal))
             {
                 // "^@BM…" は画像参照などの特殊文字列
@@ -316,6 +325,7 @@ public static class PdfRenderer
 
         private void DrawSolid(JwwSolid s, in Affine2D m)
         {
+            if (IsAuxiliaryColor(s)) return;
             var color = s.Rgb is { } rgb ? FromColorRef(rgb) : ResolveColor(s.PenColor, null);
             if (_options.Color == ColorMode.BlackAndWhite) color = XColors.Black;
             var brush = new XSolidBrush(color);
@@ -326,13 +336,14 @@ public static class PdfRenderer
                 return;
             }
 
-            // 四角形ソリッド（頂点は 0-1-3-2 の順で外周をなす）
+            // 四角形ソリッド。頂点はファイルの並び順 0→1→2→3 でそのまま多角形にする。
+            // （Jw_cad の実出力を確認済み。並びが交差していれば蝶ネクタイ形に描かれるのが正しい）
             var pts = new[]
             {
                 MapPoint(m, s.X0, s.Y0),
                 MapPoint(m, s.X1, s.Y1),
-                MapPoint(m, s.X3, s.Y3),
                 MapPoint(m, s.X2, s.Y2),
+                MapPoint(m, s.X3, s.Y3),
             };
             _gfx.DrawPolygon(brush, pts, XFillMode.Winding);
         }
