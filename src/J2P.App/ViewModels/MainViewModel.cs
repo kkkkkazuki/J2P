@@ -479,6 +479,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             _lastLog = await BatchConverter.RunAsync(jobs, _settings.ToBatchOptions(), progress,
                 _pauseSource.Token, _cancelSource.Token);
+            _lastLog.ToolVersion = AppInfo.DisplayVersion;
         }
         finally
         {

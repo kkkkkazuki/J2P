@@ -10,6 +10,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = AppInfo.WindowTitle;
         _viewModel = new MainViewModel(App.Settings);
         DataContext = _viewModel;
 

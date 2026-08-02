@@ -30,13 +30,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
+      # ダウンロードしたビルドを取り違えないよう「日付-コミットSHA」で識別する
+      - name: Build stamp
+        id: stamp
+        shell: pwsh
+        run: |
+          $stamp = "{0}-{1}" -f (Get-Date -Format 'yyyyMMdd'), "${{ github.sha }}".Substring(0, 7)
+          "value=$stamp" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "build stamp: $stamp"
       - name: Publish single-file exe
         run: >
           dotnet publish src/J2P.App -c Release -r win-x64
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:BuildStamp=${{ steps.stamp.outputs.value }}
           --self-contained true -o publish
+      - name: Stamp the exe file name
+        shell: pwsh
+        run: Rename-Item publish/J2P.exe "J2P_${{ steps.stamp.outputs.value }}.exe"
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: J2P-win-x64
-          path: publish/J2P.exe
+          name: J2P_${{ steps.stamp.outputs.value }}
+          path: publish/J2P_*.exe
