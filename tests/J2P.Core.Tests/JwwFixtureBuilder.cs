@@ -30,6 +30,13 @@ public sealed class JwwFixtureBuilder
     public uint[] PrinterPenColors { get; } = new uint[10];
     public uint[] PrinterPenWidths { get; } = new uint[10];
 
+    /// <summary>線種2〜9のドットパターン（インデックスは 線種番号-2）。</summary>
+    public uint[] LineTypePatterns { get; } = Enumerable.Repeat(0xAAAAAAAAu, 8).ToArray();
+    /// <summary>線種2〜9の1ユニットのドット数。</summary>
+    public uint[] LineTypeUnitDots { get; } = Enumerable.Repeat(8u, 8).ToArray();
+    /// <summary>線種2〜9のプリンタ出力ピッチ。</summary>
+    public uint[] LineTypePrinterPitches { get; } = Enumerable.Repeat(30u, 8).ToArray();
+
     private static uint[,] CreateLayerStates()
     {
         var a = new uint[16, 16];
@@ -363,7 +370,10 @@ public sealed class JwwFixtureBuilder
 
         for (int i = 0; i < 8; i++)     // 線種2〜9
         {
-            _w.Write(0xAAAAAAAAu); _w.Write(8u); _w.Write(4u); _w.Write(30u);
+            _w.Write(LineTypePatterns[i]);
+            _w.Write(LineTypeUnitDots[i]);
+            _w.Write(4u);               // 画面表示ピッチ
+            _w.Write(LineTypePrinterPitches[i]);
         }
         for (int i = 0; i < 5; i++)     // ランダム線
         {

@@ -17,13 +17,14 @@ public class PdfRendererTests
     }
 
     [Fact]
-    public void Layout_ファイルの印刷範囲原点が用紙左下に一致する()
+    public void Layout_印刷範囲の基準点が既定では枠中心になる()
     {
-        // A3図面、印刷原点(-210, -148.5)=用紙左下、倍率1.0
+        // 印刷原点(0,0)・倍率1.0 は Jw_cad で「用紙を図面原点中心に置いた」状態。
+        // 実機の Jw_cad 出力と突き合わせて確認した既定の解釈。
         var doc = BuildDoc(b =>
         {
-            b.PrintOriginX = -210;
-            b.PrintOriginY = -148.5;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.PrintScale = 1.0;
             b.AddLine(0, 0, 10, 10);
         });
@@ -31,23 +32,22 @@ public class PdfRendererTests
 
         var layout = PdfRenderer.ComputeLayout(doc, options, new List<string>());
 
-        // A3横 420x297mm
         Assert.Equal(420 * PtPerMm, layout.PageWidthPt, 3);
         Assert.Equal(297 * PtPerMm, layout.PageHeightPt, 3);
-        // 印刷原点（枠左下）→ ページ左下 (0, H)
+        // 基準点(0,0) がページ中心
+        var (cx, cy) = layout.Transform.Map(0, 0);
+        Assert.Equal(layout.PageWidthPt / 2, cx, 3);
+        Assert.Equal(layout.PageHeightPt / 2, cy, 3);
+        // 枠の左下(-210,-148.5) がページ左下
         var (px, py) = layout.Transform.Map(-210, -148.5);
         Assert.Equal(0, px, 3);
         Assert.Equal(layout.PageHeightPt, py, 3);
-        // 原点対角（枠右上）→ ページ右上 (W, 0)
-        var (qx, qy) = layout.Transform.Map(-210 + 420, -148.5 + 297);
-        Assert.Equal(layout.PageWidthPt, qx, 3);
-        Assert.Equal(0, qy, 3);
     }
 
     [Fact]
-    public void Layout_印刷範囲の中心はずれない_中心以外の原点でも()
+    public void Layout_印刷範囲の中心はずれない_原点が移動しても()
     {
-        // 印刷範囲が用紙中心からずれているケース: 原点(-100, -50)
+        // 印刷範囲を用紙中心から移動したケース: 基準点(-100, -50)
         var doc = BuildDoc(b =>
         {
             b.PrintOriginX = -100;
@@ -59,10 +59,37 @@ public class PdfRendererTests
 
         var layout = PdfRenderer.ComputeLayout(doc, options, new List<string>());
 
-        // 枠中心 (-100+210, -50+148.5) がページ中心に写る
-        var (cx, cy) = layout.Transform.Map(-100 + 210, -50 + 148.5);
+        // 基準点そのものがページ中心に写る（＝設定した印刷範囲の中心がずれない）
+        var (cx, cy) = layout.Transform.Map(-100, -50);
         Assert.Equal(layout.PageWidthPt / 2, cx, 3);
         Assert.Equal(layout.PageHeightPt / 2, cy, 3);
+    }
+
+    [Theory]
+    // 基準点位置コード, 基準点がページ上のどこに来るか(0..1 の相対位置)
+    [InlineData(0u, 0.5, 0.5)]   // 無指定 → 中心
+    [InlineData(5u, 0.5, 0.5)]   // 中中
+    [InlineData(1u, 0.0, 1.0)]   // 左下
+    [InlineData(9u, 1.0, 0.0)]   // 右上
+    [InlineData(7u, 0.0, 0.0)]   // 左上
+    [InlineData(3u, 1.0, 1.0)]   // 右下
+    public void Layout_基準点位置コードが枠の位置を決める(uint basePos, double relX, double relY)
+    {
+        var doc = BuildDoc(b =>
+        {
+            b.PrintOriginX = 30;
+            b.PrintOriginY = -20;
+            b.PrintScale = 1.0;
+            b.PrintFlags = basePos * 10;   // 十位が基準点位置
+            b.AddLine(0, 0, 10, 10);
+        });
+        var options = new PdfRenderOptions { PrintArea = PrintAreaMode.FilePrintSettings };
+
+        var layout = PdfRenderer.ComputeLayout(doc, options, new List<string>());
+
+        var (px, py) = layout.Transform.Map(30, -20);
+        Assert.Equal(layout.PageWidthPt * relX, px, 3);
+        Assert.Equal(layout.PageHeightPt * relY, py, 3);
     }
 
     [Fact]
@@ -70,8 +97,8 @@ public class PdfRendererTests
     {
         var doc = BuildDoc(b =>
         {
-            b.PrintOriginX = -420;
-            b.PrintOriginY = -297;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.PrintScale = 0.5;
             b.AddLine(0, 0, 10, 10);
         });
@@ -80,7 +107,7 @@ public class PdfRendererTests
         var layout = PdfRenderer.ComputeLayout(doc, options, new List<string>());
 
         Assert.Equal(PtPerMm * 0.5, layout.Transform.Scale, 6);
-        // 枠は 840x594mm
+        // 倍率50%なら枠は 840x594mm、その左下(-420,-297)がページ左下
         var (px, py) = layout.Transform.Map(-420, -297);
         Assert.Equal(0, px, 3);
         Assert.Equal(layout.PageHeightPt, py, 3);
@@ -91,8 +118,8 @@ public class PdfRendererTests
     {
         var doc = BuildDoc(b =>
         {
-            b.PrintOriginX = -148.5;
-            b.PrintOriginY = -210;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.PrintScale = 1.0;
             b.PrintFlags = 1; // 90°回転
             b.AddLine(0, 0, 10, 10);
@@ -107,17 +134,19 @@ public class PdfRendererTests
     }
 
     [Fact]
-    public void Layout_印刷設定なしは用紙全体へフォールバック()
+    public void Layout_印刷倍率が異常なら用紙全体へフォールバック()
     {
-        // 原点(0,0)・倍率1.0 で図形が印刷枠と交差しない → 用紙全体
-        var doc = BuildDoc(b => b.AddLine(-200, -140, -100, -100));
+        var doc = BuildDoc(b =>
+        {
+            b.PrintScale = 0;   // 壊れた印刷設定
+            b.AddLine(-200, -140, -100, -100);
+        });
         var options = new PdfRenderOptions { PrintArea = PrintAreaMode.FilePrintSettings };
         var warnings = new List<string>();
 
         var layout = PdfRenderer.ComputeLayout(doc, options, warnings);
 
         Assert.Contains(warnings, w => w.Contains("用紙全体"));
-        // 用紙中心が ページ中心へ
         var (cx, cy) = layout.Transform.Map(0, 0);
         Assert.Equal(layout.PageWidthPt / 2, cx, 3);
         Assert.Equal(layout.PageHeightPt / 2, cy, 3);
@@ -160,8 +189,8 @@ public class PdfRendererTests
     {
         var doc = BuildDoc(b =>
         {
-            b.PrintOriginX = -210;
-            b.PrintOriginY = -148.5;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.AddLine(0, 0, 100, 50)
              .AddLine(-50, -50, 50, 50, penStyle: 5)   // 一点鎖線
              .AddArc(50, 50, 25, flatness: 0.7, tilt: 0.3)
@@ -189,8 +218,8 @@ public class PdfRendererTests
     {
         var doc = BuildDoc(b =>
         {
-            b.PrintOriginX = -210;
-            b.PrintOriginY = -148.5;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.AddLine(0, 0, 100, 50, penColor: 3);
             b.AddSolid(0, 0, 20, 0, 0, 20, 20, 20, rgb: 0x000080FF);
         });
@@ -206,15 +235,15 @@ public class PdfRendererTests
     {
         var docWithAux = BuildDoc(b =>
         {
-            b.PrintOriginX = -210;
-            b.PrintOriginY = -148.5;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
             b.AddLine(0, 0, 100, 50, penStyle: 9); // 補助線種
             b.AddPoint(5, 5, temporary: true);      // 仮点
         });
         var docEmpty = BuildDoc(b =>
         {
-            b.PrintOriginX = -210;
-            b.PrintOriginY = -148.5;
+            b.PrintOriginX = 0;
+            b.PrintOriginY = 0;
         });
 
         using var ms1 = new MemoryStream();
@@ -233,8 +262,8 @@ public class PdfRendererTests
         {
             var doc = BuildDoc(b =>
             {
-                b.PrintOriginX = -210;
-                b.PrintOriginY = -148.5;
+                b.PrintOriginX = 0;
+                b.PrintOriginY = 0;
                 b.AddLine(0, 0, 100, 50);
             });
             using var ms = new MemoryStream();

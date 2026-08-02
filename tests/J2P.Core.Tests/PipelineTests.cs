@@ -95,8 +95,8 @@ public class BatchConverterTests : IDisposable
     private string WriteJww(string name, Action<JwwFixtureBuilder>? configure = null)
     {
         var b = new JwwFixtureBuilder();
-        b.PrintOriginX = -210;
-        b.PrintOriginY = -148.5;
+        b.PrintOriginX = 0;
+        b.PrintOriginY = 0;
         b.AddLine(0, 0, 100, 100);
         configure?.Invoke(b);
         string path = Path.Combine(_dir, name);
