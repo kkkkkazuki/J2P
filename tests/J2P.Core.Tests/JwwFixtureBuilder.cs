@@ -88,11 +88,11 @@ public sealed class JwwFixtureBuilder
         return this;
     }
 
-    public JwwFixtureBuilder AddPoint(double x, double y, bool temporary = false)
+    public JwwFixtureBuilder AddPoint(double x, double y, bool temporary = false, ushort penColor = 1)
     {
         _entities.Add(("CDataTen", () =>
         {
-            WriteCommon(1, 1, 0, 0);
+            WriteCommon(1, penColor, 0, 0);
             _w.Write(x); _w.Write(y);
             _w.Write(temporary ? 1u : 0u);
         }
@@ -102,11 +102,11 @@ public sealed class JwwFixtureBuilder
 
     public JwwFixtureBuilder AddText(double x0, double y0, double x1, double y1,
         string text, double sizeX = 3, double sizeY = 3, double spacing = 0,
-        double angleDeg = 0, string fontName = "ＭＳ ゴシック")
+        double angleDeg = 0, string fontName = "ＭＳ ゴシック", ushort penColor = 1)
     {
         _entities.Add(("CDataMoji", () =>
         {
-            WriteCommon(1, 1, 0, 0);
+            WriteCommon(1, penColor, 0, 0);
             _w.Write(x0); _w.Write(y0); _w.Write(x1); _w.Write(y1);
             _w.Write(1u); // 文字種
             _w.Write(sizeX); _w.Write(sizeY); _w.Write(spacing); _w.Write(angleDeg);
@@ -118,11 +118,11 @@ public sealed class JwwFixtureBuilder
     }
 
     public JwwFixtureBuilder AddSolid(double x0, double y0, double x1, double y1,
-        double x2, double y2, double x3, double y3, uint? rgb = null)
+        double x2, double y2, double x3, double y3, uint? rgb = null, ushort penColor = 1)
     {
         _entities.Add(("CDataSolid", () =>
         {
-            WriteCommon(1, rgb.HasValue ? (ushort)10 : (ushort)1, 0, 0);
+            WriteCommon(1, rgb.HasValue ? (ushort)10 : penColor, 0, 0);
             _w.Write(x0); _w.Write(y0); _w.Write(x1); _w.Write(y1);
             _w.Write(x2); _w.Write(y2); _w.Write(x3); _w.Write(y3);
             if (rgb.HasValue) _w.Write(rgb.Value);
