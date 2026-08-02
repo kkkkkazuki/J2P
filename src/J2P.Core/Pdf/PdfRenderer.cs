@@ -72,29 +72,12 @@ public static class PdfRenderer
         }
 
         (double MinX, double MinY, double MaxX, double MaxY)? bounds = null;
-        if (mode is PrintAreaMode.FitDrawing or PrintAreaMode.FilePrintSettings)
+        if (mode == PrintAreaMode.FitDrawing)
+        {
             bounds = BoundsCalculator.Compute(doc);
-
-        if (mode == PrintAreaMode.FitDrawing && bounds is null)
-        {
-            warnings.Add("図形が無いため、用紙全体を出力します。");
-            mode = PrintAreaMode.PaperFull;
-        }
-
-        // 印刷設定が未設定と思われる場合のフォールバック
-        // （原点(0,0)・倍率1.0 は Jw_cad が一度も印刷していないファイルの既定値）
-        if (mode == PrintAreaMode.FilePrintSettings &&
-            h.PrintOriginX == 0 && h.PrintOriginY == 0 && bair == 1.0 && !h.PrintRotated)
-        {
-            bool intersects = false;
-            if (bounds is { } b)
+            if (bounds is null)
             {
-                // 原点を左下とした A4〜srcサイズ程度の枠と図形範囲の交差を確認
-                intersects = b.MaxX > 0 && b.MinX < srcW && b.MaxY > 0 && b.MinY < srcH;
-            }
-            if (!intersects)
-            {
-                warnings.Add("ファイルに印刷範囲が保存されていないため、用紙全体を出力します。");
+                warnings.Add("図形が無いため、用紙全体を出力します。");
                 mode = PrintAreaMode.PaperFull;
             }
         }
@@ -121,9 +104,10 @@ public static class PdfRenderer
             // 印刷枠（図面座標）: ページを回転の逆向きで図面空間に置き、倍率で割る
             srcRectW = (rotate ? pageHmm : pageWmm) / mag;
             srcRectH = (rotate ? pageWmm : pageHmm) / mag;
-            // m_DPPrtGenten は印刷枠の左下基準
-            srcCx = h.PrintOriginX + srcRectW / 2;
-            srcCy = h.PrintOriginY + srcRectH / 2;
+            // m_DPPrtGenten は印刷枠の「基準点」。枠内のどこを指すかは基準点位置コードで決まり、
+            // 0(無指定)なら枠の中心。ここから枠中心へのオフセットを足す。
+            srcCx = h.PrintOriginX + BaseOffsetX(h.PrintBasePosition, srcRectW);
+            srcCy = h.PrintOriginY + BaseOffsetY(h.PrintBasePosition, srcRectH);
             scale = RenderTransform.PtPerMm * mag;
         }
         else
@@ -165,6 +149,25 @@ public static class PdfRenderer
         var transform = new RenderTransform(scale, rotate, srcCx, srcCy, pageWpt / 2, pageHpt / 2);
         return new Layout(pageWpt, pageHpt, transform);
     }
+
+    /// <summary>
+    /// プリンタ出力基準点位置（テンキー配置。1=左下 … 9=右上、0=無指定）から、
+    /// 基準点 → 印刷枠中心 のXオフセットを返す。
+    /// </summary>
+    private static double BaseOffsetX(uint basePosition, double frameWidth) => basePosition switch
+    {
+        1 or 4 or 7 => frameWidth / 2,    // 左端が基準 → 中心は右へ
+        3 or 6 or 9 => -frameWidth / 2,   // 右端が基準
+        _ => 0,                           // 0(無指定)・2・5・8 は横方向中央
+    };
+
+    /// <summary>基準点 → 印刷枠中心 のYオフセット（図面座標はY上向き）。</summary>
+    private static double BaseOffsetY(uint basePosition, double frameHeight) => basePosition switch
+    {
+        1 or 2 or 3 => frameHeight / 2,   // 下端が基準 → 中心は上へ
+        7 or 8 or 9 => -frameHeight / 2,  // 上端が基準
+        _ => 0,                           // 0(無指定)・4・5・6 は縦方向中央
+    };
 
     // ---- 描画コンテキスト ----
 
@@ -553,7 +556,7 @@ public static class PdfRenderer
                 case >= 2 and <= 8:
                 {
                     int idx = penStyle - 2;
-                    var decoded = DecodePattern(
+                    var decoded = JwwLineTypes.Decode(
                         _h.LineTypePatterns[idx], _h.LineTypeUnitDots[idx], _h.LineTypePrinterPitches[idx]);
                     return decoded ?? FallbackDash(penStyle);
                 }
@@ -584,44 +587,6 @@ public static class PdfRenderer
                 default:
                     return null;
             }
-        }
-
-        /// <summary>線種ドットパターン（32bit、unitDotsビット）→ 破線配列（mm）。</summary>
-        private static double[]? DecodePattern(uint pattern, uint unitDots, uint prtPitch)
-        {
-            if (unitDots is 0 or > 32) return null;
-            double dotMm = Math.Max(prtPitch, 1) / 100.0;
-
-            // 全て1なら実線
-            uint mask = unitDots == 32 ? uint.MaxValue : (1u << (int)unitDots) - 1;
-            uint bits = pattern & mask;
-            if (bits == mask || bits == 0) return null;
-
-            // MSB側から走査して 描画(1)/空白(0) の連長を取る
-            var runs = new List<(bool On, int Len)>();
-            for (int i = (int)unitDots - 1; i >= 0; i--)
-            {
-                bool on = (bits & (1u << i)) != 0;
-                if (runs.Count > 0 && runs[^1].On == on)
-                    runs[^1] = (on, runs[^1].Len + 1);
-                else
-                    runs.Add((on, 1));
-            }
-            // 先頭は描画から始める（空白始まりなら末尾へ回す）
-            if (!runs[0].On && runs.Count > 1)
-            {
-                var first = runs[0];
-                runs.RemoveAt(0);
-                if (runs[^1].On == first.On)
-                    runs[^1] = (first.On, runs[^1].Len + first.Len);
-                else
-                    runs.Add(first);
-            }
-            if (runs.Count < 2) return null;
-            if (runs.Count % 2 != 0)
-                runs.Add((false, 1));
-
-            return runs.Select(r => r.Len * dotMm).ToArray();
         }
 
         private static double[] FallbackDash(byte penStyle) => penStyle switch
