@@ -10,7 +10,17 @@
     <NeutralLanguage>ja-JP</NeutralLanguage>
     <Company>J2P</Company>
     <Product>J2P - Jw_cad 一括PDF変換ツール</Product>
-    <Version>0.1.0</Version>
+
+    <!--
+      バージョン表記。
+      BuildStamp には CI から「日付-コミットSHA」を渡す（例: -p:BuildStamp=20260802-e81f7d6）。
+      手元でビルドしたものと配布ビルドを取り違えないよう、未指定時は "local" になる。
+    -->
+    <VersionPrefix>0.2.0</VersionPrefix>
+    <BuildStamp Condition="'$(BuildStamp)' == ''">local</BuildStamp>
+    <InformationalVersion>$(VersionPrefix)+$(BuildStamp)</InformationalVersion>
+    <!-- SDK が InformationalVersion へ Git の SHA を自動追記するのを止める（BuildStampと二重になるため） -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
 </Project>

@@ -5,6 +5,9 @@ namespace J2P.Core.Pipeline;
 /// <summary>一括変換の結果ログ。</summary>
 public sealed class ConversionLog
 {
+    /// <summary>変換に使ったツールのバージョン表記（呼び出し側が設定する）。</summary>
+    public string? ToolVersion { get; set; }
+
     public DateTime StartedAt { get; internal set; }
     public DateTime FinishedAt { get; internal set; }
     public TimeSpan Duration => FinishedAt - StartedAt;
@@ -21,6 +24,8 @@ public sealed class ConversionLog
     {
         var sb = new StringBuilder();
         sb.AppendLine("=== J2P 一括PDF変換ログ ===");
+        if (!string.IsNullOrEmpty(ToolVersion))
+            sb.AppendLine($"バージョン : {ToolVersion}");
         sb.AppendLine($"開始時刻   : {StartedAt:yyyy/MM/dd HH:mm:ss}");
         sb.AppendLine($"終了時刻   : {FinishedAt:yyyy/MM/dd HH:mm:ss}");
         sb.AppendLine($"処理時間   : {Duration.TotalSeconds:F1} 秒");
